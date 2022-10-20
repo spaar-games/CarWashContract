@@ -121,20 +121,18 @@ contract LegendaryCarWash {
     uint256 private devFeeVal = 4;
     uint256 private refFeeVal = 3;
     bool private initializeContract;
-    uint256 private totalCarWash;
-    uint256 private totalPlayers;
-    uint256 private totalBnbDeposited;
+    uint256 public totalCarWash;
+    uint256 public totalPlayers;
+    uint256 public totalBnbDeposited;
 
     AggregatorV3Interface internal bnbPrice;
 
-    // Eventos que lanzaremos al realizar ciertas acciones
     event add_funds_event(uint256 amount, address wallet, address ref);
     event withdraw_event(uint256 amount, address wallet);
     event upgrade_carWash_event(uint256 carwashId, address wallet);
     event random_security_event(uint randomNumber, bool rob);
 
     struct User {
-        address wallet;
         uint256 balance;
         uint256 harvestDay;
         address referred;
@@ -142,8 +140,8 @@ contract LegendaryCarWash {
         uint256 timestamp;
         uint256 hrs;
         uint256 harvest;
-        bool security;        
-        uint8[8] carwash;
+        bool security;
+        uint carwashes;        
     }
 
     mapping(address => User) public carwashMap;
@@ -173,9 +171,8 @@ contract LegendaryCarWash {
         }
     }
 
-    function addFunds(address _ref) public payable {
+    function addMoney(address _ref) public payable {
         require(initializeContract, "The contract is currently paused.");
-        require(msg.value >= 2e16, "The minimum entry amount is 0.02 BNB");
         if (carwashMap[msg.sender].timestamp == 0) {
             _ref = carwashMap[_ref].timestamp == 0 ? devs : _ref;
             carwashMap[_ref].refsNumber++;
@@ -191,7 +188,7 @@ contract LegendaryCarWash {
         emit add_funds_event(msg.value, msg.sender, _ref);
     }
 
-    function recover() public {
+    function recoverMoney() public {
         require(initializeContract, "The contract is currently paused.");
         dataRecovery(msg.sender);
         carwashMap[msg.sender].balance += carwashMap[msg.sender].harvest;
@@ -200,7 +197,7 @@ contract LegendaryCarWash {
         carwashMap[msg.sender].security = false;
     }
 
-    function withdraw() public {
+    function withdrawMoney() public {
         require(initializeContract, "The contract is currently paused.");        
         uint256 balance = carwashMap[msg.sender].balance;
         uint256 bnbContract = address(this).balance;
@@ -213,42 +210,47 @@ contract LegendaryCarWash {
         emit withdraw_event(balance, msg.sender);
     }
 
-    function upgradeCarWash(uint256 _carwashId) public {
+    function buyCarWash() public {
         require(initializeContract, "The contract is currently paused.");
-        require(_carwashId < 8, "8 car washes maximum per user");
-        dataRecovery(msg.sender);
-        carwashMap[msg.sender].carwash[_carwashId]++;
-        carwashMap[msg.sender].balance -= carwashPrice(
-            _carwashId,
-            carwashMap[msg.sender].carwash[_carwashId]
-        );
-        carwashMap[msg.sender].harvestDay += harvestAmount(
-            _carwashId,
-            carwashMap[msg.sender].carwash[_carwashId]
-        );
+        dataRecovery(msg.sender);        
+        carwashMap[msg.sender].carwash[_carwashId]++;        
+        carwashMap[msg.sender].carwashes++;        
+        carwashMap[msg.sender].balance -= carwashPrice(checkLevels(msg.sender));
+        carwashMap[msg.sender].harvestDay += harvestAmount(checkLevels(msg.sender));
         totalCarWash++;
         emit upgrade_carWash_event(_carwashId, msg.sender);
     }
 
-    function dataRecovery(address _user) internal {
-        require(carwashMap[_user].timestamp > 0, "Nulled");
-        if (carwashMap[_user].harvestDay > 0) {
+    function checkLevels(address _adr) internal returns(uint _carwashId,uint _level){
+        uint countCarwash = getCarwashes(_adr);
+        uint carwashId = 0;
+        while(countCarwash > 0){
+            if(countCarwash % 5 == 0) carwashId++;
+            countCarwash--;
+        }
+        uint level = getCarwashes(_adr) - (carwashId * 5);
+        return (carwashId, level + 1);        
+    }
+
+    function dataRecovery(address _adr) internal {
+        require(carwashMap[_adr].timestamp > 0, "Not registered user");
+        if (carwashMap[_adr].harvestDay > 0) {
             uint256 hrs = block.timestamp /
                 3600 -
-                carwashMap[_user].timestamp /
+                carwashMap[_adr].timestamp /
                 3600;
-            if (carwashMap[_user].hrs + hrs > 24) {                
-                hrs = 24 - carwashMap[_user].hrs;
-                carwashMap[_user].harvest += hrs * carwashMap[_user].harvestDay;
-                carwashMap[_user].hrs += hrs;
-                if(!carwashMap[_user].security){
-                    if(randomSecurity(_user)){
-                        carwashMap[_user].harvest = 0;
+            if (carwashMap[_adr].hrs + hrs > 24) {                
+                hrs = 24 - carwashMap[_adr].hrs;
+                carwashMap[_adr].harvest += hrs * carwashMap[_adr].harvestDay;
+                carwashMap[_adr].hrs += hrs;
+                if(!carwashMap[_adr].security){
+                    if(randomSecurity(_adr)){
+                        carwashMap[_adr].harvest = 0;
                     }
                 }
+                carwashMap[_adr].timestamp = block.timestamp;
             }            
         }
-        carwashMap[_user].timestamp = block.timestamp;
     }
 
     function carwashPrice(uint256 _carwashId, uint256 _level) 
@@ -281,7 +283,7 @@ contract LegendaryCarWash {
                 [52e15, 156e15, 468e15, 1404e15, 2808e15, 5616e15, 11232e15, 22464e15][
                     _carwashId
                 ];
-        revert("Incorrect levelId");
+        revert("Incorrect level id");
     }
 
     function harvestAmount(uint256 _carwashId, uint256 _level)
@@ -314,7 +316,7 @@ contract LegendaryCarWash {
                 [1e15, 31e14, 94e14, 281e15, 562e15, 1123e14, 2246e14, 4493e14][
                     _carwashId
                 ];
-        revert("Incorrect levelId");
+        revert("Incorrect level id");
     }
 
     function buySecurity(address _adr) public{
@@ -329,26 +331,25 @@ contract LegendaryCarWash {
         carwashMap[_adr].security = true;
     }
 
-    function randomSecurity(address _adr) public returns(bool){     // ************ CAMBIAR A INTERNAL   
+    function randomSecurity(address _adr) internal returns(bool){  
         bool rob = false;
         uint random = uint(keccak256(abi.encodePacked(block.timestamp, _adr))) % 100;
-        if(random <= 20){
+        if(random <= 40){
             rob = true; 
             emit random_security_event(random, rob); 
             return true; 
         }
         rob = false;
         emit random_security_event(random, rob); 
-        return false;   
-            
+        return false;               
     }
 
     function getStatus() public view returns (bool) {
         return initializeContract;
-    }
+    }    
 
-    function getCarwash(address _adr) public view returns (uint8[8] memory) {
-        return carwashMap[_adr].carwash;
+    function getCarwashes(address _adr) public view returns (uint) {
+        return carwashMap[_adr].carwashes;
     }
 
     function devFee(uint256 _amount) private view returns (uint256) {
@@ -370,10 +371,3 @@ contract LegendaryCarWash {
         return price * 1e10;
     }
 }
-
-
-
-
-// quitar minimo de entrada
-// no deejar comprar en otro lavadero hasta que se llene al nivel 5 el anterior
-// cambiar el % de seguridad
