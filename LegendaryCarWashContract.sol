@@ -120,6 +120,7 @@ contract LegendaryCarWash {
     address payable private devs;
     uint256 private devFeeVal = 4;
     uint256 private refFeeVal = 3;
+    bool private harvest;
     bool private initializeContract;
     uint256 public totalCarWash;
     uint256 public totalPlayers;
@@ -137,9 +138,7 @@ contract LegendaryCarWash {
         uint256 harvestDay;
         address referred;
         uint256 refsNumber;
-        uint256 timestamp;
-        uint256 hrs;
-        uint256 harvest;
+        uint256 timestamp;        
         bool security;
         uint carwashes;        
     }
@@ -191,9 +190,10 @@ contract LegendaryCarWash {
     function recoverMoney() public {
         require(initializeContract, "The contract is currently paused.");
         dataRecovery(msg.sender);
-        carwashMap[msg.sender].balance += carwashMap[msg.sender].harvest;
-        carwashMap[msg.sender].hrs = 0;
-        carwashMap[msg.sender].harvest = 0;
+        if(harvest){
+            carwashMap[msg.sender].balance += carwashMap[msg.sender].harvestDay;
+            harvest = false;
+        }        
         carwashMap[msg.sender].security = false;
     }
 
@@ -239,14 +239,9 @@ contract LegendaryCarWash {
                 3600 -
                 carwashMap[_adr].timestamp /
                 3600;
-            if (carwashMap[_adr].hrs + hrs > 24) {                
-                hrs = 24 - carwashMap[_adr].hrs;
-                carwashMap[_adr].harvest += hrs * carwashMap[_adr].harvestDay;
-                carwashMap[_adr].hrs += hrs;
+            if (hrs > 24) {                
                 if(!carwashMap[_adr].security){
-                    if(randomSecurity(_adr)){
-                        carwashMap[_adr].harvest = 0;
-                    }
+                    if(randomSecurity(_adr)){ harvest = false; }
                 }
                 carwashMap[_adr].timestamp = block.timestamp;
             }            
@@ -371,3 +366,6 @@ contract LegendaryCarWash {
         return price * 1e10;
     }
 }
+
+
+// poder comprar varios lavaderos
