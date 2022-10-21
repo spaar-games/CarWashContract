@@ -140,7 +140,9 @@ contract LegendaryCarWash {
         uint256 refsNumber;
         uint256 timestamp;        
         bool security;
-        uint carwashes;        
+        uint carwashes;
+        uint256 carwashId;
+        uint256 levelCarwash;        
     }
 
     mapping(address => User) public carwashMap;
@@ -213,23 +215,27 @@ contract LegendaryCarWash {
     function buyCarWash() public {
         require(initializeContract, "The contract is currently paused.");
         dataRecovery(msg.sender);        
-        carwashMap[msg.sender].carwash[_carwashId]++;        
+        checkLevels(msg.sender);
         carwashMap[msg.sender].carwashes++;        
-        carwashMap[msg.sender].balance -= carwashPrice(checkLevels(msg.sender));
-        carwashMap[msg.sender].harvestDay += harvestAmount(checkLevels(msg.sender));
+        carwashMap[msg.sender].balance -= carwashPrice(carwashMap[msg.sender].carwashId,
+                                                carwashMap[msg.sender].levelCarwash);
+        carwashMap[msg.sender].harvestDay += harvestAmount(carwashMap[msg.sender].carwashId,
+                                                carwashMap[msg.sender].levelCarwash);
         totalCarWash++;
-        emit upgrade_carWash_event(_carwashId, msg.sender);
     }
 
-    function checkLevels(address _adr) internal returns(uint _carwashId,uint _level){
-        uint countCarwash = getCarwashes(_adr);
-        uint carwashId = 0;
+    function checkLevels(address _adr) internal //returns(uint256 _carwashId,uint256 _level)
+    {
+        uint256 countCarwash = getCarwashes(_adr);
+        uint256 carwashId = 0;
         while(countCarwash > 0){
             if(countCarwash % 5 == 0) carwashId++;
             countCarwash--;
         }
-        uint level = getCarwashes(_adr) - (carwashId * 5);
-        return (carwashId, level + 1);        
+        carwashMap[_adr].levelCarwash = getCarwashes(_adr) - (carwashId * 5);
+        carwashMap[_adr].carwashId = carwashId;
+        
+        //return (carwashId, level + 1);
     }
 
     function dataRecovery(address _adr) internal {
@@ -318,7 +324,6 @@ contract LegendaryCarWash {
         require(initializeContract, "The contract is currently paused.");
         require(_adr == msg.sender);
         require(carwashMap[_adr].timestamp > 0, "The user has not purchased any car wash.");
-        require(carwashMap[_adr].hrs == 0, "You can only hire security when you go to collect.");
         require(!carwashMap[_adr].security, "You already have security contracted for today.");
         uint256 securityAmount = SafeMath.div(SafeMath.mul(carwashMap[_adr].harvestDay, 20), 100); 
         require(carwashMap[_adr].balance >= securityAmount, "You don't have enough money to pay for security today. Add funds.");
@@ -343,7 +348,7 @@ contract LegendaryCarWash {
         return initializeContract;
     }    
 
-    function getCarwashes(address _adr) public view returns (uint) {
+    function getCarwashes(address _adr) public view returns (uint256) {
         return carwashMap[_adr].carwashes;
     }
 
